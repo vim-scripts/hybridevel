@@ -1,0 +1,8 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2793
+
+This plugin provides lots of functions for hybrid project. Each function has 
+the shortcut and the Ex command.
+
+Now the plugin supports the following projects: c,c++,java,make,ant,
+flash, and matlab are listed in the $VIMRUNTIME/development directory. You
+can write scripts such as python.vim to support other projects.
