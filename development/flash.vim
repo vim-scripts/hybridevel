@@ -20,12 +20,12 @@ function! g:FlashInitProject()
 	let t:flash_airdescription_definition="/o/f/s/"
 
 	let t:flash_source_candidacy="src:flash_src:actionscript_src"
-	let t:flash_destination_candidacy="bin:flash_bin:WebRoot/flashes"
+	let t:flash_destination_candidacy="bin:flash_bin:webroot"
 	let t:flash_library_candidacy="lib:flash_lib:actionscript_lib"
 	let t:flash_argumentfile_candidacy="flash-config.xml:flex-config.xml:air-config.xml"
 	let t:flash_airdescription_candidacy="air-app.xml"
 	
-	let t:flash_compile_command="mxmlc +configname=air -output[destination] -compiler.library-path[library] -compiler.source-path[source] -load-config[argumentfile] COMPILEOPTIONS TARGET"
+	let t:flash_compile_command="mxmlc +configname=air +flexlib=$FLEX_HOME/frameworks -output[destination] -compiler.library-path[library] -compiler.source-path[source] -load-config[argumentfile] COMPILEOPTIONS TARGET"
 	let t:flash_interpret_command="flashplayer PROGRAM"
 	let t:flash_debug_command="adl [airdescription] {g:Project.root} -- ARGUMENTS"
 

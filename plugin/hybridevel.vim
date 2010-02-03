@@ -1,7 +1,7 @@
 "" Vim global plugin for hybird projects 
-" Version: 7.0
+" Version: 8.0
 " Maintainer: WarGrey <juzhenliang@gmail.com>
-" Last Change: 2009 Sep 04
+" Last Change: 2010 Feb 01
 "*******************************************************************************
 
 if exists("b:load_development") && b:load_development==1
@@ -17,16 +17,15 @@ if !exists("g:ProjectManager")
 	let g:ProjectManager="make:ant:maven"
 endif
 
-runtime! plugin/shellinsidevim.vim
-
 " Ex command which take 0 or more ( up to 20 ) parameters
 command! -complete=file -nargs=* Compile call <SID>CLCompileProject(<f-args>)
 command! -complete=file -nargs=* Execute call <SID>CLExecuteProject(<f-args>)
 command! -complete=file -nargs=* Build call <SID>CLBuildProject(<f-args>)
+command! -complete=file -nargs=* Shell call g:ExecuteCommand(<f-args>)
 
 " Map keys to function calls
 map <unique> <F9> :call <SID>InvokeToggleMain()<CR>
-map <unique> <M-F9> :clist!<CR>
+map <unique> <M-F9> :messages<CR>
 map <unique> <F5> :call <SID>CompileProject()<CR>
 map <unique> <M-F5> :Shell :Compile 
 map <unique> <F6> :call <SID>ExecuteProject()<CR>
@@ -34,14 +33,16 @@ map <unique> <M-F6> :Shell :Execute
 map <unique> <F8> :call <SID>BuildProject()<CR>
 map <unique> <M-F8> :Shell :Build 
 
+imap <unique> <F9> <ESC><F9>a
+imap <unique> <M-F9> <ESC><M-F9>a
 imap <unique> <F5> <ESC><F5>
 imap <unique> <M-F5> <ESC><M-F5>
 imap <unique> <F6> <ESC><F6>
 imap <unique> <M-F6> <ESC><M-F6>
 imap <unique> <F8> <ESC><F8>
 imap <unique> <M-F8> <ESC><M-F8>
-imap <unique> <M-F9> <ESC><M-F9>
 
+let s:CurrentCommandResult=''
 let s:LastModifiedTime=0
 let s:FromCommandLine=0
 let s:Functions=[]
@@ -295,14 +296,7 @@ function! s:CompileProject()
 			return
 		catch /.*E488.*/
 		endtry
-
-		let exe=cmd[0:match(cmd,' ')]
-		try
-			execute 'compiler '.exe
-		catch /.*E666.*/
-			call g:EchoWarningMsg('Warning: '.v:exception.' at '.v:throwpoint.' ')
-		endtry
-		call g:ExecuteCommand(cmd,';')
+		call g:ExecuteCommand(cmd)
 	catch /.*/
 		call g:EchoErrorMsg('Compile failed: '.v:exception.' at '.v:throwpoint.' ')
 	endtry
@@ -333,7 +327,6 @@ function! s:ExecuteProject()
 		endif
 		let s:FromCommandLine=0
 
-		let hasCorrectErrorFormat=1
 		let cmd=g:ParseCommand(get(g:Project.current.command,'interpret',""))
 		if cmd==''
 			throw 'Nothing to do for empty command!'
@@ -344,14 +337,7 @@ function! s:ExecuteProject()
 			return
 		catch /.*E488.*/
 		endtry
-
-		let exe=cmd[0:match(cmd,' ')]
-		try
-			execute 'compiler '.exe
-		catch /.*/
-			let hasCorrectErrorFormat=0
-		endtry
-		call g:ExecuteCommand('>>',cmd,hasCorrectErrorFormat==1?';':'')
+		call g:ExecuteCommand('>>',cmd)
 	catch /.*/
 		call g:EchoErrorMsg('Execute failed: '.v:exception.' at '.v:throwpoint.' ')
 	finally
@@ -402,12 +388,11 @@ function! s:BuildProject()
 		for cmdfullname in cmds
 			let cmdparts=split(cmdfullname,'\.')
 			if len(cmdparts)>1
-				let cmdfullname=cmdparts[1:-1]
+				let cmdfullname=join(cmdparts[1:-1],'.')
 				call s:SetCurrentType(cmdparts[0])
 			else
 				call s:SetCurrentType(currentType)
 			endif
-			let hasCorrectErrorFormat=1
 			let cmdname=substitute(cmdfullname,'!$','','g')
 			let cmdstr=get(g:Project.current.command,cmdname,'')
 			if cmdstr==''
@@ -425,18 +410,13 @@ function! s:BuildProject()
 			try
 				call function('g:Do_'.s:GetCurrentType().'_'.cmdname)()
 			catch /.*E488.*/
-				try
-					execute 'compiler '.execmd
-				catch /.*/
-					let hasCorrectErrorFormat=0
-				endtry
-				call g:ExecuteCommand('>>',cmd,hasCorrectErrorFormat==1?';':'')
+				call g:ExecuteCommand('>>',cmd)
 			catch /.*/
-				let @+=@+.'ExecuteCommand failed: '.v:exception.' at '.v:throwpoint.' '
+				let s:CurrentCommandResult.='ExecuteCommand failed: '.v:exception.' at '.v:throwpoint.' '
 			endtry
 
-			if @+!=""
-				let lastline=split(@+,'\n')[-1]
+			if s:CurrentCommandResult!=""
+				let lastline=split(s:CurrentCommandResult,'\n')[-1]
 				if match(lastline,'^ExecuteCommand failed:')==0
 					let error=lastline.'['.execmd.']'
 					if cmdfullname=~'!$'
@@ -590,7 +570,7 @@ function! g:Prepare()
 				call s:ToggleMain()
 				return
 			catch /.*Unknown Type.*/
-				call g:EchoErrorMsg(v:exception.' at '.v:throwpoint.' ')
+				call g:EchoErrorMsg(v:exception)
 			endtry
 		else
 			call s:SetCurrentType(typename)
@@ -925,6 +905,120 @@ function! s:CheckForProjectManager(project)
 	endif
 	let g:Project[a:project]['main']=mainfile
 	return 1
+endfunction
+
+" Ex command which take 0 or more ( up to 20 ) parameters
+function! g:ExecuteCommand(...)
+	if a:0==0
+		call g:EchoWarningMsg(s:GetCmdPreffix()." <NOTHING TO EXECUTE>")
+		return
+	endif
+
+	try
+		let parms=map(deepcopy(a:000),'g:Trim(v:val)')
+		let msg=join(parms,' ')
+		let cmd=join(map(parms,'substitute(expand(v:val),"\n"," ","g")'),' ')
+		if msg=~'^\s*>*\s*:'
+			let msg=substitute(msg,'^\s*>*\s*','','g')
+			call g:EchoMoreMsg(s:GetCmdPreffix().msg)
+			execute msg
+		else
+			call s:ExecuteShell(msg,cmd)
+		endif
+	catch /.*/
+		call g:EchoErrorMsg(v:exception.' at '.v:throwpoint.' ')
+	endtry
+endfunction
+
+function! s:GetCmdPreffix()
+	return "[".substitute(strftime("%T"),':','.','g')."@".fnamemodify(getcwd(),":~").":".fnamemodify(bufname('%'),":.")."] "
+endfunction
+
+function! s:ExecuteShell(shellmsg,shellcmd)
+	let shellcmd=a:shellcmd
+	let rein=''
+	if match(a:shellmsg,'^\s*>>\s*')==0
+		let shellcmd=substitute(shellcmd,'^\s*>>\s*','','g')
+		if !filereadable('.VIM_STD_IN')
+			call writefile([],'.VIM_STD_IN')
+		endif
+		let rein=' 0<.VIM_STD_IN'
+	elseif match(a:shellmsg,'^\s*>\s*')==0
+		let shellcmd=substitute(shellcmd,'^\s*>\s*','','g')
+		if !filereadable('.VIM_STD_IN')
+			let choice=confirm("Input-file not found, give now?","&Yes\n&No",1)
+			if choice!=1
+				call g:EchoWarningMsg("Missing inputs which are required, The application may be aborted!")
+				call writefile([],'.VIM_STD_IN')
+			else
+				echo 'Pease give the inputs line by line util "EOF" given.'
+				let lines=[]
+				let line=input("")
+				while line != "EOF"
+					call add(lines,line)
+					let line=input("")
+				endwhile
+				call writefile(lines,'.VIM_STD_IN')
+			endif
+		endif
+		let rein=' 0<.VIM_STD_IN'
+	endif
+	
+	let cmd=s:GetCmdPreffix().shellcmd
+	let s:CurrentCommandResult=''
+	call g:EchoMoreMsg(cmd)
+	try
+		if shellcmd=~'^\s*cd '
+			execute shellcmd
+		else
+			let s:CurrentCommandResult=system('cd '.getcwd().' && '.shellcmd.rein)
+		endif
+	catch /.*/
+		let s:CurrentCommandResult=v:exception.' at '.v:throwpoint."\n"
+	endtry
+	if v:shell_error!=0
+		let error="ExecuteCommand failed: shell exit code ".v:shell_error
+		let s:CurrentCommandResult.=((s:CurrentCommandResult=~'\n$')?"":"\n").error."\n"
+		call g:EchoWarningMsg(error)
+	endif
+
+	try
+		execute "compiler ".shellcmd[0:match(shellcmd,' ')]
+		cexpr cmd."\n".s:CurrentCommandResult
+	catch /.*E666.*/
+		caddexpr cmd."\n".s:CurrentCommandResult
+	endtry
+	let this=bufwinnr("%")
+	copen 8
+	normal G
+	execute this."wincmd w"
+endfunction
+
+function! g:Trim(str)
+	return substitute(a:str,'\(^\s*\)\|\(\s*$\)','','g')
+endfunction
+
+function! g:FileExists(file)
+	return isdirectory(resolve(a:file)) || filereadable(resolve(a:file))
+endfunction
+
+" Highlight echo
+function! g:EchoErrorMsg(msg)
+	echohl ErrorMsg
+	echo a:msg
+	echohl None
+endfunction
+
+function! g:EchoWarningMsg(msg)
+	echohl WarningMsg
+	echomsg a:msg
+	echohl None
+endfunction
+
+function! g:EchoMoreMsg(msg)
+	echohl MoreMsg
+	echomsg a:msg
+	echohl None
 endfunction
 
 call s:DefaultInitProject()

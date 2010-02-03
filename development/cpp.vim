@@ -22,9 +22,8 @@ function! g:CppInitProject()
 	let t:cpp_include_candidacy="include:c_include:public_include"
 	let t:cpp_argumentfile_candidacy="lib.gccc:include.gccc:source.gccc"
 	
-	let t:cpp_compile_command="g++ -Wall -g3 -O3 -pipe -fexceptions -fstack-protector -fasynchronous-unwind-tables -o[destination] -I[include] -L[library] COMPILEOPTIONS TARGET @[argumentfile]"
+	let t:cpp_compile_command="g++ -Wall -g3 -pipe -fexceptions -fstack-protector -fasynchronous-unwind-tables -o[destination] -I[include] -L[library] COMPILEOPTIONS TARGET @[argumentfile]"
 	let t:cpp_interpret_command="PROGRAM ARGUMENTS"
-	let t:cpp_qt_command="qmake -makefile"
 
 	let t:cpp_build='compile:interpret'
 	let t:cpp_suffixes='cpp'

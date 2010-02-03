@@ -22,7 +22,7 @@ function! g:CInitProject()
 	let t:c_include_candidacy="include:c_include:public_include"
 	let t:c_argumentfile_candidacy="lib.gccc:include.gccc:source.gccc"
 	
-	let t:c_compile_command="gcc -Wall -g3 -O3 -pipe -fexceptions -fstack-protector -fasynchronous-unwind-tables -o[destination] -I[include] -L[library] COMPILEOPTIONS TARGET @[argumentfile]"
+	let t:c_compile_command="gcc -Wall -g3 -pipe -fexceptions -fstack-protector -fasynchronous-unwind-tables -o[destination] -I[include] -L[library] COMPILEOPTIONS TARGET @[argumentfile]"
 	let t:c_interpret_command="PROGRAM ARGUMENTS"
 
 	let t:c_build='compile:interpret'
